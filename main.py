@@ -81,18 +81,18 @@ async def sync_candles(symbol: str):
     candles_store[symbol] = deque(maxlen=100)
 
     for item in reversed(data["values"]):  # oldest to newest
-        try:
-            candles_store[symbol].append({
-                "time": item["datetime"],
-                "open": float(item["open"]),
-                "high": float(item["high"]),
-                "low": float(item["low"]),
-                "close": float(item["close"]),
-                "volume": 0.0  # no volume provided
-            })
-        except:
-            continue  # skip malformed candles
-
+    try:
+        candles_store[symbol].append({
+            "time": item["datetime"].replace(" ", "T") + "Z",
+            "open": float(item["open"]),
+            "high": float(item["high"]),
+            "low": float(item["low"]),
+            "close": float(item["close"]),
+            "volume": 0.0  # no volume provided
+        })
+    except:
+        continue  # skip malformed candles
+        
     return {
         "status": "synced",
         "symbol": symbol,
