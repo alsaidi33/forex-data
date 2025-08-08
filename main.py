@@ -5,7 +5,7 @@ from typing import List
 import csv
 import io
 import httpx
-
+from datetime import datetime
 API_KEY = "de74f23bf31d486c909fb20babfd3d9c"
 
 app = FastAPI()
@@ -36,11 +36,21 @@ async def receive_webhook(request: Request):
         return {"status": "ok"}
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
+        
 @app.get("/candles")
 def get_candles(symbol: str):
-    data = list(candles_store.get(symbol, []))
-    return {"symbol": symbol, "candles": data}
+    if symbol not in candles_store:
+        return {"symbol": symbol, "values": []}
+    # Sort by time DESC (newest first)
+    sorted_data = sorted(
+        candles_store[symbol],
+        key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ"),
+        reverse=True
+    )
+    return {
+        "symbol": symbol,
+        "values": sorted_data
+    }
 
 @app.delete("/candles/clear")
 def clear_candles(symbol: str):
