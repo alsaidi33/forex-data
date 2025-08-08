@@ -109,3 +109,86 @@ async def sync_candles(symbol: str):
         "stored": len(candles_store[symbol])
     }
 
+@app.get("/candles/sync_all")
+async def sync_all_candles():
+    pairs = [
+        "AUDCAD", "AUDJPY", "AUDUSD", "CADJPY", "EURGBP",
+        "EURJPY", "EURUSD", "GBPAUD", "GBPCAD", "GBPJPY",
+        "GBPUSD", "USDCAD", "USDCHF", "USDJPY"
+    ]
+
+    url = "https://api.twelvedata.com/time_series"
+    results = {}
+
+    async with httpx.AsyncClient() as client:
+        for symbol in pairs:
+            formatted_symbol = f"{symbol[:3]}/{symbol[3:]}"
+            params = {
+                "symbol": formatted_symbol,
+                "interval": "5min",
+                "outputsize": 100,
+                "apikey": API_KEY,
+                "timezone": "UTC"
+            }
+
+            try:
+                response = await client.get(url, params=params)
+                data = response.json()
+
+                if response.status_code != 200 or data.get("status") != "ok" or "values" not in data:
+                    results[symbol] = {"status": "error", "message": data.get("message", "No data")}
+                    continue
+
+                candles_store[symbol] = deque(maxlen=100)
+
+                for item in reversed(data["values"]):
+                    try:
+                        candles_store[symbol].append({
+                            "time": item["datetime"].replace(" ", "T") + "Z",
+                            "open": float(item["open"]),
+                            "high": float(item["high"]),
+                            "low": float(item["low"]),
+                            "close": float(item["close"]),
+                            "volume": 0.0
+                        })
+                    except:
+                        continue
+
+                results[symbol] = {"status": "synced", "stored": len(candles_store[symbol])}
+
+            except Exception as e:
+                results[symbol] = {"status": "error", "message": str(e)}
+
+    return results
+    
+@app.get("/candles/check_gaps")
+def check_gaps():
+    results = {}
+
+    for symbol, candles in candles_store.items():
+        # Sort by time ascending (oldest to newest)
+        sorted_candles = sorted(
+            candles,
+            key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ")
+        )
+
+        has_gap = False
+        previous_time = None
+
+        for candle in sorted_candles:
+            current_time = datetime.strptime(candle["time"], "%Y-%m-%dT%H:%M:%SZ")
+            if previous_time:
+                expected = previous_time + timedelta(minutes=5)
+                if current_time != expected:
+                    has_gap = True
+                    break
+            previous_time = current_time
+
+        results[symbol] = {
+            "status": "gap_detected" if has_gap else "ok",
+            "stored": len(candles)
+        }
+
+    return results
+
+
