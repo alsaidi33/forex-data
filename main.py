@@ -191,4 +191,26 @@ def check_gaps():
 
     return results
 
+@app.get("/candles/last_update")
+def get_last_updates():
+    result = {}
+
+    for symbol, candles in candles_store.items():
+        if candles:
+            # Find the newest candle by time
+            latest_candle = max(
+                candles,
+                key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ")
+            )
+            result[symbol] = {
+                "last_update": latest_candle["time"],
+                "stored": len(candles)
+            }
+        else:
+            result[symbol] = {
+                "last_update": None,
+                "stored": 0
+            }
+
+    return result
 
