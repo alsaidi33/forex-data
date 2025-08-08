@@ -13,18 +13,23 @@ app = FastAPI()
 # Store max 100 candles per symbol
 candles_store = defaultdict(lambda: deque(maxlen=100))
 
+from datetime import datetime, timedelta
+
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     body = await request.body()
     text = body.decode("utf-8").strip()
-
     try:
-        # Parse CSV: TICKER,TIME,OPEN,HIGH,LOW,CLOSE,VOLUME
         reader = csv.reader(io.StringIO(text))
         for row in reader:
             if len(row) != 7:
                 return JSONResponse(content={"error": "Invalid CSV format"}, status_code=400)
             symbol, time, open_, high, low, close, volume = row
+            # Convert time to close time (add 5 min)
+            time = (
+                datetime.strptime(time, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=5)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
             candles_store[symbol].append({
                 "time": time,
                 "open": float(open_),
@@ -93,7 +98,7 @@ async def sync_candles(symbol: str):
     for item in reversed(data["values"]):  # oldest to newest
         try:
             candles_store[symbol].append({
-                "time": (datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S") - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "time": item["datetime"].replace(" ", "T") + "Z",
                 "open": float(item["open"]),
                 "high": float(item["high"]),
                 "low": float(item["low"]),
