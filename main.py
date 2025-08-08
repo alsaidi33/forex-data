@@ -38,3 +38,10 @@ async def receive_webhook(request: Request):
 def get_candles(symbol: str):
     data = list(candles_store.get(symbol, []))
     return {"symbol": symbol, "candles": data}
+
+@app.delete("/candles/clear")
+def clear_candles(symbol: str):
+    if symbol in candles_store:
+        candles_store[symbol].clear()
+        return {"status": "cleared", "symbol": symbol}
+    return {"status": "not_found", "symbol": symbol}
