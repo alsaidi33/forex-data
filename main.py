@@ -166,28 +166,41 @@ def check_gaps():
     results = {}
 
     for symbol, candles in candles_store.items():
-        # Sort by time ascending (oldest to newest)
-        sorted_candles = sorted(
-            candles,
-            key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ")
-        )
+        if len(candles) < 2:
+            results[symbol] = {
+                "status": "ok",
+                "stored": len(candles)
+            }
+            continue
 
-        has_gap = False
-        previous_time = None
+        try:
+            # Sort by time ascending
+            sorted_candles = sorted(
+                candles,
+                key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ")
+            )
 
-        for candle in sorted_candles:
-            current_time = datetime.strptime(candle["time"], "%Y-%m-%dT%H:%M:%SZ")
-            if previous_time:
-                expected = previous_time + timedelta(minutes=5)
-                if current_time != expected:
+            has_gap = False
+            previous_time = datetime.strptime(sorted_candles[0]["time"], "%Y-%m-%dT%H:%M:%SZ")
+
+            for i in range(1, len(sorted_candles)):
+                current_time = datetime.strptime(sorted_candles[i]["time"], "%Y-%m-%dT%H:%M:%SZ")
+                if (current_time - previous_time) != timedelta(minutes=5):
                     has_gap = True
                     break
-            previous_time = current_time
+                previous_time = current_time
 
-        results[symbol] = {
-            "status": "gap_detected" if has_gap else "ok",
-            "stored": len(candles)
-        }
+            results[symbol] = {
+                "status": "gap_detected" if has_gap else "ok",
+                "stored": len(candles)
+            }
+
+        except Exception as e:
+            results[symbol] = {
+                "status": "error",
+                "message": str(e),
+                "stored": len(candles)
+            }
 
     return results
 
