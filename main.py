@@ -93,7 +93,7 @@ async def sync_candles(symbol: str):
     for item in reversed(data["values"]):  # oldest to newest
         try:
             candles_store[symbol].append({
-                "time": item["datetime"].replace(" ", "T") + "Z",
+                "time": (datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S") - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "open": float(item["open"]),
                 "high": float(item["high"]),
                 "low": float(item["low"]),
@@ -161,7 +161,7 @@ async def sync_all_candles():
 
     return results
     
-@app.get("/candles/check_gaps")
+@app.get("/candles/check")
 def check_gaps():
     results = {}
 
@@ -174,24 +174,51 @@ def check_gaps():
             continue
 
         try:
-            # Sort by time ascending
-            sorted_candles = sorted(
-                candles,
-                key=lambda x: datetime.strptime(x["time"], "%Y-%m-%dT%H:%M:%SZ")
-            )
+            # Parse and sort candles by time (ascending)
+            parsed = [
+                {
+                    **candle,
+                    "dt": datetime.strptime(candle["time"], "%Y-%m-%dT%H:%M:%SZ")
+                }
+                for candle in candles
+            ]
+            sorted_candles = sorted(parsed, key=lambda x: x["dt"])
 
             has_gap = False
-            previous_time = datetime.strptime(sorted_candles[0]["time"], "%Y-%m-%dT%H:%M:%SZ")
+            has_duplicate = False
+            seen_times = set()
+            previous_time = sorted_candles[0]["dt"]
 
             for i in range(1, len(sorted_candles)):
-                current_time = datetime.strptime(sorted_candles[i]["time"], "%Y-%m-%dT%H:%M:%SZ")
+                current_time = sorted_candles[i]["dt"]
+
+                # Check for gap
                 if (current_time - previous_time) != timedelta(minutes=5):
                     has_gap = True
-                    break
+
+                # Check for duplicates
+                if sorted_candles[i]["time"] in seen_times:
+                    has_duplicate = True
+                else:
+                    seen_times.add(sorted_candles[i]["time"])
+
                 previous_time = current_time
 
+            # Add first candle time to seen
+            seen_times.add(sorted_candles[0]["time"])
+
+            # Determine status
+            if has_gap and has_duplicate:
+                status = "gap_and_duplicate"
+            elif has_gap:
+                status = "gap_detected"
+            elif has_duplicate:
+                status = "duplicate_detected"
+            else:
+                status = "ok"
+
             results[symbol] = {
-                "status": "gap_detected" if has_gap else "ok",
+                "status": status,
                 "stored": len(candles)
             }
 
