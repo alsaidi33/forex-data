@@ -5,7 +5,7 @@ from typing import List
 import csv
 import io
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
 API_KEY = "de74f23bf31d486c909fb20babfd3d9c"
 
 app = FastAPI()
